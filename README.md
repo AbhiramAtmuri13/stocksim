@@ -74,44 +74,41 @@ stocksim/
 ```markdown
 ## 📬 API Endpoints (Use in Postman)
 
-1. Register:
-   - `POST http://localhost:8000/auth/register`
-   - Body:
-     ```json
-     {
-       "username": "abhiram",
-       "email": "abhiram@example.com",
-       "password": "mypassword"
-     }
-     ```
+### 1. Register
+**POST** `http://localhost:8000/auth/register`  
+**Body**:
+```json
+{
+  "username": "abhiram",
+  "email": "abhiram@example.com",
+  "password": "mypassword"
+}
 
-2. Login:
-   - `POST http://localhost:8000/auth/login`
-   - Body:
-     ```json
-     {
-       "email": "abhiram@example.com",
-       "password": "mypassword"
-     }
-     ```
-   - Response will give `access_token` (JWT)
+### 2. Login
+**POST** `http://localhost:8000/auth/login`  
+**Body**:
+```json
+{
+  "email": "abhiram@example.com",
+  "password": "mypassword"
+}
 
-3. Place Order:
-   - `POST http://localhost:8000/orders/place-order`
-   - Headers:
-     - `Authorization: Bearer <your_token_here>`
-     - `Content-Type: application/json`
-   - Body:
-     ```json
-     {
-       "stock_symbol": "AAPL",
-       "quantity": 10,
-       "price": 150.00,
-       "order_type": "buy"
-     }
-     ```
+### 3. Place Order
+**POST** `http://localhost:8000/orders/place-order`
+**Headers**:
+`Authorization: Bearer <your_token_here>`
+`Content-Type: application/json`
+**Body**:
+```json
+{
+  "stock_symbol": "AAPL",
+  "quantity": 10,
+  "price": 150.00,
+  "order_type": "buy"
+}
 
-
+```markdown
+---
 ## 👨‍💻 Author
 
 **Abhiram Atmuri**  
