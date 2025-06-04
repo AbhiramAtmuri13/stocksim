@@ -112,10 +112,6 @@ stocksim/
      ```
 
 
-
-
-
-
 ## 👨‍💻 Author
 
 **Abhiram Atmuri**  
