@@ -116,9 +116,6 @@ stocksim/
 
 
 
-
-
-
 ## 👨‍💻 Author
 
 **Abhiram Atmuri**  
