@@ -1,5 +1,14 @@
+# Python
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+
+# venv
 venv/
-*.log
+
+# IDE / OS junk
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets
+.env
