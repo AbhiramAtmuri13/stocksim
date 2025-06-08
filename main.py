@@ -9,6 +9,7 @@ from models.order import Order
 from models.trade import Trade
 from api.trades import router as trades_router
 
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()

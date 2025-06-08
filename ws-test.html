@@ -1,0 +1,4 @@
+html<br>
+<!doctype html>
+<title>WS test</title>
+<script>let ws=new WebSocket("ws://localhost:8001/ws/trades");ws.onmessage=e=>console.log("📈 live trade:",JSON.parse(e.data));</script>Open DevTools → Console.</script>

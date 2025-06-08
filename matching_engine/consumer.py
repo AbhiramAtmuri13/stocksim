@@ -1,27 +1,27 @@
-import json, threading, pika
-from fastapi import FastAPI
-import uvicorn
-
-# ----------  ORDER-BOOK in memory ----------
+# ─────────────────────────── imports ────────────────────────────
+import json, threading, asyncio, pika, uvicorn
 from collections import defaultdict, deque
+from datetime import datetime, UTC         # timezone-aware
 
+from fastapi import FastAPI, WebSocket
+from matching_engine.ws_hub import register, unregister, broadcast
+from services.trade_logger import record_trade
+from models.user import User               # ensures 'users' table in metadata
+from models.order import Order             # optional; good for completeness
+
+# ────────────────────────── in-memory book ──────────────────────
 order_books = defaultdict(lambda: {"buy": deque(), "sell": deque()})
 
-def add_order(symbol, side, order):
+def add_order(symbol: str, side: str, order: dict):
     order_books[symbol][side].append(order)
 
-def remove_first(symbol, side):
+def remove_first(symbol: str, side: str):
     order_books[symbol][side].popleft()
 
-# ----------  TRADE LOGGER ----------
-from services.trade_logger import record_trade
-from models.user import User      # needed so 'users' table exists
-from models.order import Order    # optional
-
-# ----------  MATCHING LOGIC ----------
-def process_order(order):
+# ───────────────────────── matching logic ───────────────────────
+def process_order(order: dict):
     sym  = order["stock_symbol"].upper()
-    side = order["order_type"]                 # buy / sell
+    side = order["order_type"]               # "buy" / "sell"
     opp  = "sell" if side == "buy" else "buy"
     qty  = order["quantity"]
     px   = order["price"]
@@ -29,31 +29,45 @@ def process_order(order):
     remaining = qty
     while order_books[sym][opp] and remaining:
         top = order_books[sym][opp][0]
-        if (side == "buy"  and px >= top["price"]) or \
-           (side == "sell" and px <= top["price"]):
+        match = (side == "buy"  and px >= top["price"]) or \
+                (side == "sell" and px <= top["price"])
 
-            trade_qty = min(remaining, top["quantity"])
-            print(f"[TRADE] {side.upper()} {trade_qty} {sym} @ {top['price']}")
-            record_trade(
-                buyer_id  = order["user_id"] if side == "buy" else top["user_id"],
-                seller_id = top["user_id"]   if side == "buy" else order["user_id"],
-                stock_symbol = sym,
-                price    = top["price"],
-                quantity = trade_qty,
-            )
-            remaining       -= trade_qty
-            top["quantity"] -= trade_qty
-            if top["quantity"] == 0:
-                remove_first(sym, opp)
-        else:
+        if not match:
             break
+
+        trade_qty = min(remaining, top["quantity"])
+        print(f"[TRADE] {side.upper()} {trade_qty} {sym} @ {top['price']}")
+        record_trade(
+            buyer_id   = order["user_id"] if side == "buy" else top["user_id"],
+            seller_id  = top["user_id"]   if side == "buy" else order["user_id"],
+            stock_symbol = sym,
+            price      = top["price"],
+            quantity   = trade_qty,
+        )
+
+        # push live update to WebSocket clients
+        if loop:
+            asyncio.run_coroutine_threadsafe(
+                broadcast({
+                    "symbol":   sym,
+                    "price":    top["price"],
+                    "quantity": trade_qty,
+                    "timestamp": datetime.now(UTC).isoformat()
+                }),
+                loop
+            )
+
+        remaining        -= trade_qty
+        top["quantity"]  -= trade_qty
+        if top["quantity"] == 0:
+            remove_first(sym, opp)
 
     if remaining:
         order["quantity"] = remaining
         add_order(sym, side, order)
         print(f"[ORDER BOOK] Added unmatched {side.upper()} order: {order}")
 
-# ----------  RABBITMQ CONSUMER ----------
+# ─────────────────────── RabbitMQ consumer ──────────────────────
 def consume_orders():
     conn = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
     ch   = conn.channel()
@@ -68,23 +82,39 @@ def consume_orders():
     print("[MATCHING ENGINE] Waiting for orders...")
     ch.start_consuming()
 
-# ----------  SMALL FASTAPI APP ----------
+# ───────────────────────── FastAPI app ──────────────────────────
 api = FastAPI(title="Order-Book API")
+loop: asyncio.AbstractEventLoop | None = None   # will capture running loop
 
+@api.on_event("startup")
+async def _capture_loop():
+    global loop
+    loop = asyncio.get_running_loop()
+
+# WebSocket feed
+@api.websocket("/ws/trades")
+async def trades_ws(ws: WebSocket):
+    await register(ws)
+    try:
+        while True:
+            await ws.receive_text()          # ignore client messages
+    except Exception:
+        unregister(ws)
+
+# REST endpoints
 @api.get("/order-book")
 def all_books():
-    return {sym: {"buy": list(b["buy"]), "sell": list(b["sell"])}
-            for sym, b in order_books.items()}
+    return {s: {"buy": list(b["buy"]), "sell": list(b["sell"])}
+            for s, b in order_books.items()}
 
 @api.get("/order-book/{symbol}")
 def one_book(symbol: str):
-    print("🔍  API asked for", symbol, "book is:", order_books[symbol.upper()])
-    b = order_books.get(symbol.upper(), {"buy": [], "sell": []})
-    return {"symbol": symbol.upper(), "buy": list(b["buy"]), "sell": list(b["sell"])}
+    book = order_books.get(symbol.upper(), {"buy": [], "sell": []})
+    return {"symbol": symbol.upper(),
+            "buy":  list(book["buy"]),
+            "sell": list(book["sell"])}
 
-# ----------  RUN EVERYTHING ----------
+# ────────────────────────── main entry ──────────────────────────
 if __name__ == "__main__":
-    # thread 1: matching engine
     threading.Thread(target=consume_orders, daemon=True).start()
-    # thread 2: mini API on port 8001
     uvicorn.run(api, host="0.0.0.0", port=8001)
