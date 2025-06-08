@@ -8,7 +8,7 @@ from models.user import User
 from models.order import Order
 from models.trade import Trade
 from api.trades import router as trades_router
-
+from api.portfolio import router as portfolio_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -28,6 +28,8 @@ app.include_router(auth_router, prefix="/auth")
 app.include_router(order_router, prefix="/orders")
 
 app.include_router(trades_router, prefix="/trades")
+
+app.include_router(portfolio_router, prefix="/portfolio")
 
 @app.get("/")
 def root():
