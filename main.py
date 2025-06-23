@@ -9,6 +9,8 @@ from models.order import Order
 from models.trade import Trade
 from api.trades import router as trades_router
 from api.portfolio import router as portfolio_router
+from models.balance import Balance
+from api.balance import router as balance_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -30,6 +32,8 @@ app.include_router(order_router, prefix="/orders")
 app.include_router(trades_router, prefix="/trades")
 
 app.include_router(portfolio_router, prefix="/portfolio")
+
+app.include_router(balance_router)
 
 @app.get("/")
 def root():
